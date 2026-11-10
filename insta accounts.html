@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My links</title>
+<style>
+:root{--bg:#e9eef2;--card:#fbfcfd;--ink:#1c2733;--muted:#5d6b78;--line:#c3cdd6;--accent:#1f5f8b;--accent-ink:#fff;--danger:#a63a3a}
+@media (prefers-color-scheme:dark){:root{--bg:#141b22;--card:#1d2731;--ink:#e6edf3;--muted:#98a6b3;--line:#33414e;--accent:#6fb3e0;--accent-ink:#0d1a24;--danger:#e08080}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,"Times New Roman",serif}
+main{max-width:640px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:1.9rem;margin:0 0 4px;font-weight:700}
+.sub{color:var(--muted);margin:0 0 24px;font-family:system-ui,sans-serif;font-size:.9rem}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+li{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:6px;padding:14px 16px}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+a.link{color:var(--accent);font-size:1.2rem;font-weight:700;text-decoration:none;word-break:break-all}
+a.link:hover{text-decoration:underline}
+.url{font:.78rem system-ui,sans-serif;color:var(--muted);word-break:break-all;margin-top:2px}
+.meaning{margin:10px 0 0;white-space:pre-wrap;min-height:1.5em}
+.meaning.empty{color:var(--muted);font-style:italic}
+.actions{display:flex;gap:8px;margin-top:10px}
+button{font:600 .85rem system-ui,sans-serif;padding:6px 12px;border-radius:5px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.del{color:var(--danger)}
+textarea,input{width:100%;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink)}
+textarea{min-height:72px;resize:vertical;margin-top:10px}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+form{display:flex;gap:8px;margin-top:24px}
+form input{flex:1}
+.hint{font:.8rem system-ui,sans-serif;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<main>
+  <h1>My links</h1>
+  <p class="sub">Click a name to open it in a new tab. Click “Edit meaning” to write what it means to you.</p>
+  <ul id="list"></ul>
+  <form id="add">
+    <input id="newUrl" type="url" placeholder="Paste another link to add it" aria-label="New link" required>
+    <button class="primary" type="submit">Add link</button>
+  </form>
+  <p class="hint" id="hint"></p>
+</main>
+<script>
+const KEY = "link-notes-v1";
+const defaults = [
+  "https://www.instagram.com/rzen.creates/",
+  "https://www.instagram.com/hackerspacesg/",
+  "https://www.instagram.com/applecatjam/",
+  "https://www.instagram.com/totorochan2020/"
+].map(u => ({ url: u, meaning: "" }));
+
+let items = load();
+let editing = null;
+const list = document.getElementById("list");
+const hint = document.getElementById("hint");
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return defaults;
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(items)); hint.textContent = ""; }
+  catch (e) { hint.textContent = "Couldn’t save in this browser. Your edits will be lost when you close the page."; }
+}
+function label(url) {
+  try {
+    const u = new URL(url);
+    const part = u.pathname.split("/").filter(Boolean)[0];
+    return part ? (u.hostname.includes("instagram") ? "@" + part : part) : u.hostname;
+  } catch (e) { return url; }
+}
+function el(tag, props = {}, ...kids) {
+  const n = Object.assign(document.createElement(tag), props);
+  kids.forEach(k => n.append(k));
+  return n;
+}
+function render() {
+  list.replaceChildren();
+  items.forEach((it, i) => {
+    const li = el("li");
+    li.append(el("div", { className: "top" },
+      el("a", { className: "link", href: it.url, target: "_blank", rel: "noopener noreferrer", textContent: label(it.url) })));
+    li.append(el("div", { className: "url", textContent: it.url }));
+
+    if (editing === i) {
+      const ta = el("textarea", { value: it.meaning, placeholder: "What does this link mean?", ariaLabel: "Meaning" });
+      const saveBtn = el("button", { className: "primary", textContent: "Save", onclick: () => { items[i].meaning = ta.value.trim(); editing = null; save(); render(); } });
+      const cancel = el("button", { textContent: "Cancel", onclick: () => { editing = null; render(); } });
+      ta.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveBtn.click(); if (e.key === "Escape") cancel.click(); });
+      li.append(ta, el("div", { className: "actions" }, saveBtn, cancel));
+      setTimeout(() => ta.focus(), 0);
+    } else {
+      li.append(el("p", { className: "meaning" + (it.meaning ? "" : " empty"), textContent: it.meaning || "No meaning yet." }));
+      li.append(el("div", { className: "actions" },
+        el("button", { textContent: it.meaning ? "Edit meaning" : "Add meaning", onclick: () => { editing = i; render(); } }),
+        el("button", { className: "del", textContent: "Remove", onclick: () => { if (confirm("Remove this link?")) { items.splice(i, 1); editing = null; save(); render(); } } })));
+    }
+    list.append(li);
+  });
+  if (!items.length) list.append(el("li", {}, "No links yet. Paste one below."));
+}
+document.getElementById("add").addEventListener("submit", e => {
+  e.preventDefault();
+  const input = document.getElementById("newUrl");
+  items.push({ url: input.value.trim(), meaning: "" });
+  input.value = "";
+  save(); render();
+});
+render();
+</script>
+</body>
+</html>
